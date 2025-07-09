@@ -1,0 +1,13 @@
+{
+    "name": "sample",
+    "description": "sample package for code security",
+    "license": "MIT",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "start": "node index.js"
+    },
+    "dependencies": {
+        "express": "9.9.9"
+    }
+}
