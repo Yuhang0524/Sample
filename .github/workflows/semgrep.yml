@@ -1,0 +1,68 @@
+name: Semgrep SAST
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  schedule:
+    - cron: '7 */6 * * *'
+
+jobs:
+  semgrep:
+    name: Scan
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write 
+
+    container:
+      image: returntocorp/semgrep
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        run: |
+          semgrep scan \
+            --sarif --output=semgrep.report.sarif \
+            --config="p/default" \
+            --metrics=off \
+            --exclude-rule="go.lang.security.audit.crypto.bad_imports.insecure-module-used" \
+            --exclude-rule="javascript.apollo.security.apollo-axios-ssrf.apollo-axios-ssrf" \
+            --exclude-rule="python.lang.security.deserialization.avoid-pyyaml-load.avoid-pyyaml-load" \
+            --exclude='*-lock.json' \
+            --exclude='package.json' \
+            --exclude='requirements.txt' \
+            --exclude='pom.xml'
+      
+      # - name: Scrub CVE keywords
+      #   # 修改点 2：使用 sed 将所有的 CVE/cve 替换为 "SAST-Ref"
+      #   # 这样即使规则描述里提到了 CVE，在最终生成的 SARIF 中也会被抹除
+      #   run: |
+      #     sed 's/[Cc][Vv][Ee]/SAST-Ref/g' semgrep.report.sarif.raw > semgrep.report.sarif
+      
+      - name: Upload SARIF file
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.report.sarif
+        if: always() 
+
+      - name: Upload SARIF to Cortex Cloud 3rd Party AppSec Collector
+        env:
+          CORTEX_API_KEY_ID: ${{ secrets.CORTEX_API_KEY_ID }}
+          CORTEX_API_KEY: ${{ secrets.CORTEX_API_KEY }}
+        run: |
+          # The exact curl command is provided by the Cortex integration wizard. 
+          # It will look similar to this:
+          curl -X POST "https://api-tac-c3.xdr.eu.paloaltonetworks.com/public_api/appsec/v1/collectors/69c23a08d93e7dadbb1fbfa3?repository_id=3a517db757e974fdbe25067b9931e51614b28829a7884095e9c7ded8fea45cdf&branch=main" \
+            -H "x-crtx-auth-id: $CORTEX_API_KEY_ID" \
+            -H "Authorization: $CORTEX_API_KEY" \
+            -H "Content-Type: application/json" \
+            -d @semgrep.report.sarif
+
+      - name: Save SARIF as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: semgrep-results
+          path: semgrep.report.sarif
