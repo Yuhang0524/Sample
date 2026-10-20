@@ -40,3 +40,15 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         run: |
           echo "Input message: ${{ inputs.test_message }}"
+
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Run Prisma Cloud
+        id: Prisma Cloud
+        uses: bridgecrewio/checkov-action@master
+        env:
+          PRISMA_API_URL: https://api.anz.prismacloud.io
+        with:
+          api-key: ${{ secrets.BC_API_KEY }}
+          use_enforcement_rules: true
